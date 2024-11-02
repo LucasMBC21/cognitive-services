@@ -6,82 +6,97 @@ import { computerVision, isConfigured as ComputerVisionIsConfigured } from './az
 
 function App() {
 
-  const [fileSelected, setFileSelected] = useState(null);
-  const [analysis, setAnalysis] = useState(null);
+  // Estados para armazenar a URL da imagem, a descrição e se está em processamento
+  const [fileSelected, setFileSelected] = useState('');
+  const [description, setDescription] = useState('');
   const [processing, setProcessing] = useState(false);
-  
+
+  // Função que lida com mudanças no input de URL
   const handleChange = (e) => {
-    setFileSelected(e.target.value)
+    setFileSelected(e.target.value);
   }
-  const onFileUrlEntered = (e) => {
 
-    // hold UI
+  // Função para enviar a URL para a API e buscar a descrição
+  const onFileUrlEntered = async () => {
+    if (!fileSelected) {
+      alert("Por favor, insira uma URL de imagem.");
+      return;
+    }
+
+    // Segurar a interface durante o processamento
     setProcessing(true);
-    setAnalysis(null);
+    setDescription('');
 
-    computerVision(fileSelected || null).then((item) => {
-      // reset state/form
-      setAnalysis(item);
-      setFileSelected("");
+    try {
+      // Chama o serviço Azure Computer Vision
+      const response = await computerVision(fileSelected);
+      console.log("Resposta completa da Azure:", response); // Log da resposta completa para depuração
+
+      // Verifica se há uma descrição na resposta e exibe corretamente
+      if (response && response.description) {
+        setDescription(response.description);
+      } else {
+        setDescription('Nenhuma descrição encontrada para a imagem.');
+      }
+
+    } catch (error) {
+      console.error('Erro ao buscar a descrição da imagem:', error.message);
+      console.error('Erro completo:', error);
+      setDescription('Erro ao obter a descrição da imagem.');
+    } finally {
       setProcessing(false);
-    });
-
+    }
   };
 
-  // Display JSON data in readable format
-  const PrettyPrintJson = (data) => {
-    return (<div><pre>{JSON.stringify(data, null, 2)}</pre></div>);
-  }
-
-  const DisplayResults = () => {
-    return (
-      <div>
-        <h2>Computer Vision Analysis</h2>
-        <div><img src={analysis.URL} height="200" border="1" alt={(analysis.description && analysis.description.captions && analysis.description.captions[0].text ? analysis.description.captions[0].text : "can't find caption")} /></div>
-        {PrettyPrintJson(analysis)}
-      </div>
-    )
-  };
-  
+  // Função que renderiza a interface de análise
   const Analyze = () => {
     return (
-    <div>
-      <h1>Analyze image</h1>
-      {!processing &&
+      <div style={{ textAlign: 'center', padding: '50px' }}>
+        <h1>Azure Vision - Descrição da Imagem</h1>
         <div>
-          <div>
-            <label>URL</label>
-            <input type="text" placeholder="Enter URL or leave empty for random image from collection" size="50" onChange={handleChange}></input>
-          </div>
-          <button onClick={onFileUrlEntered}>Analyze</button>
+          <input
+            type="text"
+            placeholder="Digite a URL da imagem"
+            size="50"
+            value={fileSelected}
+            onChange={handleChange}
+            style={{ padding: '10px', fontSize: '16px' }}
+          />
         </div>
-      }
-      {processing && <div>Processing</div>}
-      <hr />
-      {analysis && DisplayResults()}
+        <button
+          onClick={onFileUrlEntered}
+          style={{ marginTop: '20px', padding: '10px 20px', fontSize: '16px' }}
+          disabled={processing}
+        >
+          {processing ? 'Processando...' : 'Obter Descrição'}
+        </button>
+        <div style={{ marginTop: '20px', fontSize: '18px' }}>
+          {description && <p><strong>Descrição da Imagem:</strong> {description}</p>}
+        </div>
       </div>
-    )
-  }
-  
+    );
+  };
+
+  // Função para exibir uma mensagem caso o Azure não esteja configurado
   const CantAnalyze = () => {
     return (
-      <div>Key and/or endpoint not configured in ./azure-cognitiveservices-computervision.js</div>
-    )
+      <div style={{ textAlign: 'center', padding: '50px' }}>
+        <h2>Erro de Configuração</h2>
+        <p>Chave e/ou endpoint não estão configurados em ./azure-cognitiveservices-computervision.js.</p>
+      </div>
+    );
   }
-  
+
+  // Função para determinar o que deve ser renderizado com base na configuração
   function Render() {
     const ready = ComputerVisionIsConfigured();
-    if (ready) {
-      return <Analyze />;
-    }
-    return <CantAnalyze />;
+    return ready ? <Analyze /> : <CantAnalyze />;
   }
 
   return (
     <div>
       {Render()}
     </div>
-    
   );
 }
 

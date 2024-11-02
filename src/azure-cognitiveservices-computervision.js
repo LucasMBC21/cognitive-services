@@ -4,95 +4,37 @@
 import { ComputerVisionClient } from '@azure/cognitiveservices-computervision';
 import { ApiKeyCredentials } from '@azure/ms-rest-js';
 
-// List of sample images to use in demo
-import RandomImageUrl from './DefaultImages';
-
 // Authentication requirements
 const key = process.env.REACT_APP_AZURE_COMPUTER_VISION_KEY;
 const endpoint = process.env.REACT_APP_AZURE_COMPUTER_VISION_ENDPOINT;
 
-console.log(`key = ${key}`)
-console.log(`endpoint = ${endpoint}`)
-
-// Cognitive service features
-const visualFeatures = [
-    "ImageType",
-    "Faces",
-    "Adult",
-    "Categories",
-    "Color",
-    "Tags",
-    "Description",
-    "Objects",
-    "Brands"
-];
-
+// Verificação de configuração
 export const isConfigured = () => {
-    const result = (key && endpoint && (key.length > 0) && (endpoint.length > 0)) ? true : false;
-    console.log(`key = ${key}`)
-    console.log(`endpoint = ${endpoint}`)
-    console.log(`ComputerVision isConfigured = ${result}`)
+    const result = (key && endpoint && key.length > 0 && endpoint.length > 0);
+    console.log(`ComputerVision isConfigured = ${result}`);
     return result;
 }
 
-// Computer Vision detected Printed Text
-const includesText = async (tags) => {
-    return tags.filter((el) => {
-        return el.name.toLowerCase() === "text";
-    });
-}
-// Computer Vision detected Handwriting
-const includesHandwriting = async (tags) => {
-    return tags.filter((el) => {
-        return el.name.toLowerCase() === "handwriting";
-    });
-}
-// Wait for text detection to succeed
-const wait = (timeout) => {
-    return new Promise(resolve => {
-        setTimeout(resolve, timeout);
-    });
-}
-
-// Analyze Image from URL
+// Analisar Imagem a partir da URL
 export const computerVision = async (url) => {
-
-    // authenticate to Azure service
+    // Autenticar com o serviço da Azure
     const computerVisionClient = new ComputerVisionClient(
-        new ApiKeyCredentials({ inHeader: { 'Ocp-Apim-Subscription-Key': key } }), endpoint);
+        new ApiKeyCredentials({ inHeader: { 'Ocp-Apim-Subscription-Key': key } }), 
+        endpoint
+    );
 
-    // get image URL - entered in form or random from Default Images
-    const urlToAnalyze = url || RandomImageUrl();
-    
-    // analyze image
-    const analysis = await computerVisionClient.analyzeImage(urlToAnalyze, { visualFeatures });
+    try {
+        // Analisar a imagem para obter a descrição
+        const analysis = await computerVisionClient.analyzeImage(url, { visualFeatures: ["Description"] });
 
-    // text detected - what does it say and where is it
-    if (includesText(analysis.tags) || includesHandwriting(analysis.tags)) {
-        analysis.text = await readTextFromURL(computerVisionClient, urlToAnalyze);
+        // Retornar apenas a descrição encontrada
+        if (analysis.description && analysis.description.captions.length > 0) {
+            return { description: analysis.description.captions[0].text };
+        } else {
+            return { description: 'Nenhuma descrição encontrada para a imagem.' };
+        }
+    } catch (error) {
+        console.error('Erro ao analisar a imagem:', error);
+        throw new Error('Erro ao analisar a imagem.');
     }
-
-    // all information about image
-    return { "URL": urlToAnalyze, ...analysis};
-}
-// analyze text in image
-const readTextFromURL = async (client, url) => {
-    
-    let result = await client.read(url);
-    let operationID = result.operationLocation.split('/').slice(-1)[0];
-
-    // Wait for read recognition to complete
-    // result.status is initially undefined, since it's the result of read
-    const start = Date.now();
-    console.log(`${start} -${result?.status} `);
-    
-    while (result.status !== "succeeded") {
-        await wait(500);
-        console.log(`${Date.now() - start} -${result?.status} `);
-        result = await client.getReadResult(operationID);
-    }
-    
-    // Return the first page of result. 
-    // Replace[0] with the desired page if this is a multi-page file such as .pdf or.tiff.
-    return result.analyzeResult; 
 }
